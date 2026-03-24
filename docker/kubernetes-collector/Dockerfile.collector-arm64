@@ -10,7 +10,7 @@ RUN apk update && apk add --no-cache coreutils pciutils && \
 
 FROM base AS builder
 ARG PROJECT_PYVERSION
-ARG CHECKMK_AGENT_VERSION=2.4.0-latest
+ARG CHECKMK_AGENT_VERSION
 ARG CHECKMK_AGENT_DIR="/opt/omd/versions/default/share/check_mk/agents"
 ARG CHECKMK_AGENT_PLUGIN_DIR="${CHECKMK_AGENT_DIR}/plugins"
 COPY ./requirements_build.txt /tmp
@@ -30,7 +30,7 @@ RUN pip3 install --no-cache-dir -r /tmp/requirements_build.txt && \
     rm -rf /var/cache/apk/*
 
 FROM base AS release
-ARG CHECKMK_AGENT_VERSION=2.4.0-latest
+ARG CHECKMK_AGENT_VERSION
 ARG GIT_HASH
 ENV CHECKMK_AGENT_VERSION="${CHECKMK_AGENT_VERSION}"
 COPY --from=builder /install /usr/local
