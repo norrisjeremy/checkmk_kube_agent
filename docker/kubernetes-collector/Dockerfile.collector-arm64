@@ -37,6 +37,7 @@ COPY --from=builder /install /usr/local
 RUN addgroup appgroup -g 10001 && \
     adduser -HD appuser -G appgroup -u 10001
 RUN echo "${GIT_HASH}" > GIT_HASH.txt
+# Remove vulnerable old versions and upgrade build tools to latest versions to prevent vulnerabilities in the final image
 RUN pip3 install --no-cache-dir \
         "pip>=26.0" \
         "setuptools>=79.0.1" \
