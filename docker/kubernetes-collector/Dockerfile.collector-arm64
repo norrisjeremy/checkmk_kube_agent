@@ -1,5 +1,8 @@
 ARG CHECKMK_AGENT_VERSION=2.4.0-latest
 ARG PROJECT_PYVERSION=1.0.0
+ARG CMK_PLATFORM=linux/amd64
+
+FROM --platform=${CMK_PLATFORM} checkmk/check-mk-raw:${CHECKMK_AGENT_VERSION} AS checkmk
 
 FROM python:3.10-alpine AS base
 RUN apk update && apk add --no-cache coreutils pciutils && \
@@ -7,13 +10,15 @@ RUN apk update && apk add --no-cache coreutils pciutils && \
 
 FROM base AS builder
 ARG PROJECT_PYVERSION
-ARG CHECKMK_AGENT_VERSION
+ARG CHECKMK_AGENT_VERSION=2.4.0-latest
+ARG CHECKMK_AGENT_DIR="/opt/omd/versions/default/share/check_mk/agents"
+ARG CHECKMK_AGENT_PLUGIN_DIR="${CHECKMK_AGENT_DIR}/plugins"
 COPY ./requirements_build.txt /tmp
 COPY dist/checkmk_kube_agent-"${PROJECT_PYVERSION}".tar.gz /tmp/
 
-COPY ./check_mk_agent.openwrt /install/bin/check_mk_agent.openwrt
-COPY ./mk_inventory.linux /install/bin/mk_inventory.linux
-COPY ./lnx_container_host_if.linux /install/bin/lnx_container_host_if.linux
+COPY --from=checkmk "${CHECKMK_AGENT_DIR}/check_mk_agent.openwrt" /install/bin/check_mk_agent.openwrt
+COPY --from=checkmk "${CHECKMK_AGENT_PLUGIN_DIR}/mk_inventory.linux" /install/bin/mk_inventory.linux
+COPY --from=checkmk "${CHECKMK_AGENT_PLUGIN_DIR}/lnx_container_host_if.linux" /install/bin/lnx_container_host_if.linux
 COPY docker/kubernetes-collector/wrapper.sh /install/bin/check_mk_agent
 
 RUN pip3 install --no-cache-dir -r /tmp/requirements_build.txt && \
@@ -25,7 +30,7 @@ RUN pip3 install --no-cache-dir -r /tmp/requirements_build.txt && \
     rm -rf /var/cache/apk/*
 
 FROM base AS release
-ARG CHECKMK_AGENT_VERSION
+ARG CHECKMK_AGENT_VERSION=2.4.0-latest
 ARG GIT_HASH
 ENV CHECKMK_AGENT_VERSION="${CHECKMK_AGENT_VERSION}"
 COPY --from=builder /install /usr/local
