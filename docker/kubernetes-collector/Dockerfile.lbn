@@ -43,7 +43,6 @@ RUN pip3 install --no-cache-dir \
         "setuptools>=79.0.1" \
         "wheel>=0.46.2" && \
     pip3 install --no-cache-dir --force-reinstall \
-        "starlette>=0.47.2" \
         "urllib3>=2.6.3" \
         "jaraco.context>=6.1.0" && \
     find /usr/local/lib -path "*/setuptools/_vendor/jaraco.context*" -exec rm -rf {} + && \
