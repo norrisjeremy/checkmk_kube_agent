@@ -150,7 +150,7 @@ jobs:
           format: 'table'
           severity: 'HIGH,CRITICAL'
           exit-code: '1'
-          trivyignores: .trivyignore
+          trivyignores: .trivyignore.lbn
 
       - name: Push cadvisor-patched to GHCR
         run: |
@@ -187,7 +187,7 @@ jobs:
           format: 'table'
           severity: 'HIGH,CRITICAL'
           exit-code: '1'
-          trivyignores: .trivyignore
+          trivyignores: .trivyignore.lbn
 
 
       - name: Push kubernetes-collector to GHCR
