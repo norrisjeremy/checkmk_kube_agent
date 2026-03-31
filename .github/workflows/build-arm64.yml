@@ -1,0 +1,193 @@
+name: Build ARM64 Checkmk Collector Images
+
+on:
+  push:
+    branches: [lbn/1.0.0]
+    paths:
+      - 'docker/**'
+      - 'src/**'
+      - 'requirements*.txt'
+      - 'setup.py'
+      - '.github/workflows/build-arm64.yml'
+
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag (e.g. 1.0.0-arm64). Defaults to git tag or SHA.'
+        required: false
+      checkmk_agent_version:
+        description: 'Checkmk agent version'
+        required: false
+        default: '2.4.0-latest'
+      cadvisor_version:
+        description: 'Upstream cadvisor version'
+        required: false
+        default: 'v0.56.2'
+
+env:
+  REGISTRY: ghcr.io
+  COLLECTOR_IMAGE: ${{ github.repository_owner }}/checkmk-kubernetes-collector
+  CADVISOR_IMAGE: ${{ github.repository_owner }}/checkmk-cadvisor-patched
+  CHECKMK_AGENT_VERSION: "2.4.0-latest"
+  CADVISOR_VERSION: "v0.56.2"
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set image tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+          elif [ -n "$(git describe --tags --exact-match 2>/dev/null)" ]; then
+            TAG=$(git describe --tags --exact-match)
+            echo "tag=${TAG}-arm64" >> $GITHUB_OUTPUT
+          else
+            SHORT_SHA=$(git rev-parse --short HEAD)
+            echo "tag=${SHORT_SHA}-arm64" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set build args from inputs or defaults
+        id: args
+        run: |
+          echo "agent_version=${{ github.event.inputs.checkmk_agent_version || env.CHECKMK_AGENT_VERSION }}" >> $GITHUB_OUTPUT
+          echo "cadvisor_version=${{ github.event.inputs.cadvisor_version || env.CADVISOR_VERSION }}" >> $GITHUB_OUTPUT
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.10'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Cadvisor metadata
+        id: cadvisor-meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.CADVISOR_IMAGE }}
+          tags: |
+            type=raw,value=latest-arm64,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,format=short,suffix=-arm64
+            type=ref,event=branch,suffix=-arm64
+          labels: |
+            git.sha=${{ github.sha }}
+            app.name=checkmk-cadvisor-patched
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+
+      - name: Collector metadata
+        id: collector-meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.COLLECTOR_IMAGE }}
+          tags: |
+            type=raw,value=latest-arm64,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,format=short,suffix=-arm64
+            type=ref,event=branch,suffix=-arm64
+          labels: |
+            git.sha=${{ github.sha }}
+            app.name=checkmk-kubernetes-collector
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+        with:
+          platforms: arm64
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build Python distribution
+        run: |
+          pip install build
+          python -m build --sdist
+
+      - name: Get Python package version
+        id: pyversion
+        run: |
+          VERSION=$(grep __version__ src/checkmk_kube_agent/__init__.py | sed 's/__version__ = "//g' | sed 's/"//g')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build and push cadvisor-patched (ARM64)
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        with:
+          context: .
+          file: ./docker/cadvisor/Dockerfile.lbn
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.CADVISOR_IMAGE }}:${{ steps.tag.outputs.tag }}
+            ${{ steps.cadvisor-meta.outputs.tags }}
+          labels: ${{ steps.cadvisor-meta.outputs.labels }}
+          build-args: |
+            GIT_HASH=${{ github.sha }}
+            CADVISOR_VERSION=${{ steps.args.outputs.cadvisor_version }}
+          annotations: ${{ steps.cadvisor-meta.outputs.annotations }}
+          sbom: true
+          provenance: true
+          cache-from: type=gha,scope=cadvisor
+          cache-to: type=gha,mode=max,scope=cadvisor
+
+      - name: Build and push kubernetes-collector (ARM64)
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        with:
+          context: .
+          file: ./docker/kubernetes-collector/Dockerfile.lbn
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.COLLECTOR_IMAGE }}:${{ steps.tag.outputs.tag }}
+            ${{ steps.collector-meta.outputs.tags }}
+          labels: ${{ steps.collector-meta.outputs.labels }}
+          annotations: ${{ steps.collector-meta.outputs.annotations }}
+          build-args: |
+            PROJECT_PYVERSION=${{ steps.pyversion.outputs.version }}
+            CHECKMK_AGENT_VERSION=${{ steps.args.outputs.agent_version }}
+            GIT_HASH=${{ github.sha }}
+          sbom: true
+          provenance: true
+          cache-from: type=gha,scope=collector
+          cache-to: type=gha,mode=max,scope=collector
+
+      - name: Scan cadvisor-patched for vulnerabilities
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.CADVISOR_IMAGE }}:${{ steps.tag.outputs.tag }}
+          format: 'table'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+
+      - name: Scan kubernetes-collector for vulnerabilities
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.COLLECTOR_IMAGE }}:${{ steps.tag.outputs.tag }}
+          format: 'table'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+
+      - name: Print image details
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | Tag |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| cadvisor-patched | \`${{ env.REGISTRY }}/${{ env.CADVISOR_IMAGE }}:${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| kubernetes-collector | \`${{ env.REGISTRY }}/${{ env.COLLECTOR_IMAGE }}:${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Checkmk Agent Version:** ${{ steps.args.outputs.agent_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**cadvisor Version:** ${{ steps.args.outputs.cadvisor_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Git SHA:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
