@@ -3,3 +3,13 @@
 # Cluster Collector API is IP-restricted at ALB to Checkmk server only.
 CVE-2024-47874
 CVE-2025-54121
+
+# Cadvisor Go dependencies — upstream issue.
+# Compiled into the cadvisor binary. Requires a new cadvisor release
+# built with Go >=1.25.8 and gRPC >=1.79.3.
+# Monitor https://github.com/google/cadvisor/releases for a fix.
+CVE-2026-33186
+CVE-2025-68121
+CVE-2026-25679
+CVE-2026-27142
+CVE-2026-27139
