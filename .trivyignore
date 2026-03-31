@@ -1,0 +1,5 @@
+# Starlette CVEs — accepted risk.
+# Cannot upgrade without breaking FastAPI/pydantic v1 compatibility.
+# Cluster Collector API is IP-restricted at ALB to Checkmk server only.
+CVE-2024-47874
+CVE-2025-54121
