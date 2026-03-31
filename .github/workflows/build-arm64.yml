@@ -129,7 +129,33 @@ jobs:
           file: ./docker/cadvisor/Dockerfile.lbn
           platforms: linux/arm64
           push: false
-          outputs: type=oci,dest=/tmp/cadvisor.tar
+          load: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.CADVISOR_IMAGE }}:${{ steps.tag.outputs.tag }}
+            ${{ steps.cadvisor-meta.outputs.tags }}
+          labels: ${{ steps.cadvisor-meta.outputs.labels }}
+          build-args: |
+            GIT_HASH=${{ github.sha }}
+            CADVISOR_VERSION=${{ steps.args.outputs.cadvisor_version }}
+          cache-from: type=gha,scope=cadvisor
+          cache-to: type=gha,mode=max,scope=cadvisor
+
+      - name: Scan cadvisor-patched for vulnerabilities
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.CADVISOR_IMAGE }}:${{ steps.tag.outputs.tag }}
+          format: 'table'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+          trivyignores: .trivyignore.lbn
+
+      - name: Build and push cadvisor-patched (ARM64)
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        with:
+          context: .
+          file: ./docker/cadvisor/Dockerfile.lbn
+          platforms: linux/arm64
+          push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.CADVISOR_IMAGE }}:${{ steps.tag.outputs.tag }}
             ${{ steps.cadvisor-meta.outputs.tags }}
@@ -143,20 +169,6 @@ jobs:
           cache-from: type=gha,scope=cadvisor
           cache-to: type=gha,mode=max,scope=cadvisor
 
-      - name: Scan cadvisor-patched for vulnerabilities
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
-        with:
-          input: /tmp/cadvisor.tar
-          format: 'table'
-          severity: 'HIGH,CRITICAL'
-          exit-code: '1'
-          trivyignores: .trivyignore.lbn
-
-      - name: Push cadvisor-patched to GHCR
-        run: |
-          skopeo copy --all \
-            oci-archive:/tmp/cadvisor.tar \
-            docker://${{ env.REGISTRY }}/${{ env.CADVISOR_IMAGE }}:${{ steps.tag.outputs.tag }}
 
       - name: Build kubernetes-collector (ARM64)
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
@@ -165,7 +177,35 @@ jobs:
           file: ./docker/kubernetes-collector/Dockerfile.lbn
           platforms: linux/arm64
           push: false
-          outputs: type=oci,dest=/tmp/collector.tar
+          load: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.COLLECTOR_IMAGE }}:${{ steps.tag.outputs.tag }}
+            ${{ steps.collector-meta.outputs.tags }}
+          labels: ${{ steps.collector-meta.outputs.labels }}
+          annotations: ${{ steps.collector-meta.outputs.annotations }}
+          build-args: |
+            PROJECT_PYVERSION=${{ steps.pyversion.outputs.version }}
+            CHECKMK_AGENT_VERSION=${{ steps.args.outputs.agent_version }}
+            GIT_HASH=${{ github.sha }}
+          cache-from: type=gha,scope=collector
+          cache-to: type=gha,mode=max,scope=collector
+
+      - name: Scan kubernetes-collector for vulnerabilities
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: 'oci-archive:///tmp/collector.tar'
+          format: 'table'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+          trivyignores: .trivyignore.lbn
+
+      - name: Build and push kubernetes-collector (ARM64)
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        with:
+          context: .
+          file: ./docker/kubernetes-collector/Dockerfile.lbn
+          platforms: linux/arm64
+          push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.COLLECTOR_IMAGE }}:${{ steps.tag.outputs.tag }}
             ${{ steps.collector-meta.outputs.tags }}
@@ -179,22 +219,6 @@ jobs:
           provenance: true
           cache-from: type=gha,scope=collector
           cache-to: type=gha,mode=max,scope=collector
-
-      - name: Scan kubernetes-collector for vulnerabilities
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
-        with:
-          input: /tmp/collector.tar
-          format: 'table'
-          severity: 'HIGH,CRITICAL'
-          exit-code: '1'
-          trivyignores: .trivyignore.lbn
-
-
-      - name: Push kubernetes-collector to GHCR
-        run: |
-          skopeo copy --all \
-            oci-archive:/tmp/collector.tar \
-            docker://${{ env.REGISTRY }}/${{ env.COLLECTOR_IMAGE }}:${{ steps.tag.outputs.tag }}
 
       - name: Print image details
         run: |
