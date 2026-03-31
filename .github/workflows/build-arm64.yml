@@ -22,14 +22,14 @@ on:
       cadvisor_version:
         description: 'Upstream cadvisor version'
         required: false
-        default: 'v0.56.2'
+        default: '0.56.2'
 
 env:
   REGISTRY: ghcr.io
   COLLECTOR_IMAGE: ${{ github.repository_owner }}/checkmk-kubernetes-collector
   CADVISOR_IMAGE: ${{ github.repository_owner }}/checkmk-cadvisor-patched
   CHECKMK_AGENT_VERSION: "2.4.0-latest"
-  CADVISOR_VERSION: "v0.56.2"
+  CADVISOR_VERSION: "0.56.2"
 
 jobs:
   build-and-push:
