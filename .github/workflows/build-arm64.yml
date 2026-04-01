@@ -9,6 +9,7 @@ on:
       - 'requirements*.txt'
       - 'setup.py'
       - '.github/workflows/build-arm64.yml'
+      - '.trivyignore.lbn'
 
   workflow_dispatch:
     inputs:
