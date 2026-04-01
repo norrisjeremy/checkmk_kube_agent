@@ -34,7 +34,7 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write
@@ -95,11 +95,6 @@ jobs:
             app.name=checkmk-kubernetes-collector
         env:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
-        with:
-          platforms: arm64
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
