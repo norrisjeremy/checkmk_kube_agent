@@ -42,6 +42,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
 
       - name: Set image tag
         id: tag
@@ -75,30 +77,24 @@ jobs:
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.CADVISOR_IMAGE }}
-          tags: |
-            type=raw,value=latest-arm64,enable=${{ github.ref == 'refs/heads/main' }}
-            type=sha,format=short,suffix=-arm64
-            type=ref,event=branch,suffix=-arm64
+          tags: type=ref,event=branch,suffix=-arm64
           labels: |
             git.sha=${{ github.sha }}
             app.name=checkmk-cadvisor-patched
         env:
-          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest
 
       - name: Collector metadata
         id: collector-meta
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.COLLECTOR_IMAGE }}
-          tags: |
-            type=raw,value=latest-arm64,enable=${{ github.ref == 'refs/heads/main' }}
-            type=sha,format=short,suffix=-arm64
-            type=ref,event=branch,suffix=-arm64
+          tags: type=ref,event=branch,suffix=-arm64
           labels: |
             git.sha=${{ github.sha }}
             app.name=checkmk-kubernetes-collector
         env:
-          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
@@ -183,7 +179,6 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.COLLECTOR_IMAGE }}:${{ steps.tag.outputs.tag }}
             ${{ steps.collector-meta.outputs.tags }}
           labels: ${{ steps.collector-meta.outputs.labels }}
-          annotations: ${{ steps.collector-meta.outputs.annotations }}
           build-args: |
             PROJECT_PYVERSION=${{ steps.pyversion.outputs.version }}
             CHECKMK_AGENT_VERSION=${{ steps.args.outputs.agent_version }}
@@ -194,7 +189,7 @@ jobs:
       - name: Scan kubernetes-collector for vulnerabilities
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
-          image-ref: 'oci-archive:///tmp/collector.tar'
+          image-ref: ${{ env.REGISTRY }}/${{ env.COLLECTOR_IMAGE }}:${{ steps.tag.outputs.tag }}
           format: 'table'
           severity: 'HIGH,CRITICAL'
           exit-code: '1'
